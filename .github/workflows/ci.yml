@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+        node-red: ["4.1.0", "5.0.7"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false node-red@${{ matrix.node-red }}
+      - run: npm test
+        env:
+          REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
+      - run: npm run test:integration
+        env:
+          REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
+      - run: npm run test:load
+        env:
+          REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
+          GATEWAY_LOAD_REQUESTS: 500
+          GATEWAY_LOAD_CONCURRENCY: 25
+      - run: npm run verify:requirements
+      - run: npm audit --omit=dev
+      - run: npm run check:pack

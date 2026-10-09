@@ -1,0 +1,431 @@
+<script type="text/javascript">
+(function () {
+    "use strict";
+    const category = "redkern gateway";
+    const color = "#A9DCD6";
+    function label(value, fallback) { return value || fallback; }
+    function setupTabs(prefix) {
+        const tabs = RED.tabs.create({ id: prefix + "-tabs", onchange: function (tab) {
+            $("." + prefix + "-tab").hide();
+            $("." + prefix + "-tab-" + tab.id.split("-").pop()).show();
+        }});
+        ["general", "reliability", "advanced"].forEach(function (name) {
+            tabs.addTab({ id: prefix + "-" + name, label: RED._("redkern-node-red-gateway:tabs." + name) });
+        });
+        tabs.activateTab(prefix + "-general");
+    }
+
+    RED.nodes.registerType("redkern-gateway-server-config", {
+        category: "config", color: color, defaults: {
+            name: { value: "" }, host: { value: "", required: true }, port: { value: "", required: true },
+            maxPayload: { value: 1048576 }, maxConnections: { value: 500 }, maxUnauthenticatedConnections: { value: 50 },
+            helloTimeoutMs: { value: 5000 }, maxInFlightPerConnection: { value: 1000 }, maxResultBytes: { value: 262144 },
+            maxQueueDepth: { value: 10000 }, maxQueueBytes: { value: 67108864 }, defaultRate: { value: 100 }, defaultBurst: { value: 100 },
+            queueBytesFactor: { value: 1.5 }, queueEntryOverheadBytes: { value: 128 },
+            maxDeliveries: { value: 3 }, dlqRetentionMs: { value: 86400000 }, maxDlqEntries: { value: 10000 },
+            redisEvictionSampleMs: { value: 15000 },
+            drainTimeoutMs: { value: 12000 }, closeBudgetMs: { value: 12000 }, completeDrainTimeoutMs: { value: 600000 },
+            leaseTtlMs: { value: 15000 }, leaseSafetyMarginMs: { value: 5000 }, leaseRenewEveryMs: { value: 5000 },
+            dedupWindowMs: { value: 3600000 }, resultTtlMs: { value: 120000 },
+            asyncResultTtlMs: { value: 3600000 }, sessionReconnectGraceMs: { value: 10000 },
+            redisMode: { value: "standalone" }, redisHost: { value: "" }, redisPort: { value: 6379 },
+            redisNodes: { value: "[]" }, redisDb: { value: 0 }, redisKeyPrefix: { value: "pod-gateway" },
+            redisConnectTimeoutMs: { value: 10000 }, redisCommandTimeoutMs: { value: 5000 },
+            allowEvictingRedis: { value: false }, redisTls: { value: false }
+        }, credentials: { tlsKey: { type: "password" }, tlsCert: { type: "password" }, redisPassword: { type: "password" } },
+        label: function () { return label(this.name, "Gateway Server"); },
+        oneditprepare: function () { setupTabs("gateway-server"); }
+    });
+    RED.nodes.registerType("redkern-gateway-account", {
+        category: "config", color: color, defaults: {
+            name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
+            accountName: { value: "", required: true }, operationPrefixes: { value: "", required: true }
+        }, credentials: { token: { type: "password" }, nextToken: { type: "password" } },
+        label: function () { return label(this.name, this.accountName || "Gateway Account"); }
+    });
+    RED.nodes.registerType("redkern-gateway-client-config", {
+        category: "config", color: color, defaults: {
+            name: { value: "" }, url: { value: "", required: true }, podId: { value: "", required: true },
+            connectTimeoutMs: { value: 10000 }, deliveryMarginMs: { value: 2000 }
+        }, credentials: { token: { type: "password" } },
+        label: function () { return label(this.name, this.podId || "Gateway Client"); }
+    });
+    RED.nodes.registerType("redkern-gateway-api-config", {
+        category: "config", color: color, defaults: {
+            name: { value: "" }, apiName: { value: "" }, url: { value: "", required: true }, method: { value: "GET" },
+            tokenHeader: { value: "Authorization" }, timeoutMs: { value: 30000 }, maxResponseBytes: { value: 262144 },
+            rate: { value: 0 }, burst: { value: 1 }
+        }, credentials: { token: { type: "password" } },
+        label: function () { return label(this.name, this.url || "Gateway API"); }
+    });
+    RED.nodes.registerType("redkern-gateway-call", {
+        category: category, color: color, icon: "redkern-gateway-call.svg", inputs: 1, outputs: 2,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.call"),
+        inputLabels: RED._("redkern-node-red-gateway:ports.request"),
+        outputLabels: [RED._("redkern-node-red-gateway:ports.result"), RED._("redkern-node-red-gateway:ports.error")],
+        defaults: {
+            name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
+            operation: { value: "", required: true }, queueTimeoutMs: { value: 30000 }, execTimeoutMs: { value: 30000 },
+            deadlineMs: { value: 60000 }, deliveryMarginMs: { value: 2000 }
+        }, label: function () { return label(this.name, this.operation || "call"); }, oneditprepare: function () { setupTabs("gateway-call"); }
+    });
+    RED.nodes.registerType("redkern-gateway-out", {
+        category: category, color: color, icon: "redkern-gateway-out.svg", inputs: 1, outputs: 0,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.out"),
+        inputLabels: RED._("redkern-node-red-gateway:ports.request"),
+        defaults: {
+            name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
+            operation: { value: "", required: true }, priority: { value: "normal" }
+        }, label: function () { return label(this.name, this.operation || "out"); }
+    });
+    RED.nodes.registerType("redkern-gateway-in", {
+        category: category, color: color, icon: "redkern-gateway-in.svg", inputs: 0, outputs: 1,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.in"),
+        outputLabels: [RED._("redkern-node-red-gateway:ports.result")],
+        defaults: {
+            name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
+            operation: { value: "", required: true }
+        }, label: function () { return label(this.name, this.operation || "in"); }
+    });
+    RED.nodes.registerType("redkern-gateway-adapter", {
+        category: category, color: color, icon: "redkern-gateway-adapter.svg", inputs: 0, outputs: 0,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.adapter"),
+        defaults: {
+            name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
+            api: { value: "", type: "redkern-gateway-api-config", required: true }, operation: { value: "", required: true },
+            concurrency: { value: 32 }, queueTimeoutMs: { value: 30000 }, execTimeoutMs: { value: 30000 },
+            deadlineMs: { value: 60000 }, rate: { value: 0 }, burst: { value: 1 },
+            retryClass: { value: "never" }, maxDeliveries: { value: 3 }, forwardIdempotencyKey: { value: false }
+        }, label: function () { return label(this.name, this.operation || "adapter"); }
+    });
+    RED.nodes.registerType("redkern-gateway-worker-in", {
+        category: category, color: color, icon: "redkern-gateway-worker-in.svg", inputs: 0, outputs: 1,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.workerIn"),
+        outputLabels: [RED._("redkern-node-red-gateway:ports.request")],
+        defaults: {
+            name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
+            operation: { value: "", required: true }, execTimeoutMs: { value: 30000 }, concurrency: { value: 32 },
+            retryClass: { value: "never" }, maxDeliveries: { value: 3 }
+        }, label: function () { return label(this.name, this.operation || "worker in"); }
+    });
+    RED.nodes.registerType("redkern-gateway-worker-out", {
+        category: category, color: color, icon: "redkern-gateway-worker-out.svg", inputs: 1, outputs: 0,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.workerOut"),
+        inputLabels: RED._("redkern-node-red-gateway:ports.result"),
+        defaults: {
+            name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
+            operation: { value: "", required: true }
+        }, label: function () { return label(this.name, this.operation || "worker out"); }
+    });
+    RED.nodes.registerType("redkern-gateway-metrics", {
+        category: category, color: color, icon: "redkern-gateway-metrics.svg", inputs: 0, outputs: 1,
+        paletteLabel: RED._("redkern-node-red-gateway:nodes.metrics"),
+        outputLabels: [RED._("redkern-node-red-gateway:ports.metrics")],
+        defaults: {
+            name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true }, events: { value: "" }
+        },
+        label: function () { return label(this.name, "metrics"); }
+    });
+}());
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-server-config">
+    <div class="form-row"><ul id="gateway-server-tabs"></ul></div>
+    <div class="gateway-server-tab gateway-server-tab-general">
+        <div class="form-row"><label for="node-config-input-name">Name</label><input type="text" id="node-config-input-name"></div>
+        <div class="form-row"><label for="node-config-input-host">Host</label><input type="text" id="node-config-input-host" required></div>
+        <div class="form-row"><label for="node-config-input-port">WebSocket port</label><input type="number" id="node-config-input-port" min="1" max="65535" required></div>
+    </div>
+    <div class="gateway-server-tab gateway-server-tab-reliability">
+        <div class="form-row"><label for="node-config-input-maxConnections">Max connections</label><input type="number" id="node-config-input-maxConnections"></div>
+        <div class="form-row"><label for="node-config-input-maxUnauthenticatedConnections">Unauthenticated limit</label><input type="number" id="node-config-input-maxUnauthenticatedConnections"></div>
+        <div class="form-row"><label for="node-config-input-helloTimeoutMs">Hello timeout (ms)</label><input type="number" id="node-config-input-helloTimeoutMs"></div>
+        <div class="form-row"><label for="node-config-input-maxInFlightPerConnection">In-flight limit</label><input type="number" id="node-config-input-maxInFlightPerConnection"></div>
+    </div>
+    <div class="gateway-server-tab gateway-server-tab-advanced">
+        <div class="form-row"><label for="node-config-input-maxPayload">Max payload (bytes)</label><input type="number" id="node-config-input-maxPayload"></div>
+        <div class="form-row"><label for="node-config-input-maxResultBytes">Max result (bytes)</label><input type="number" id="node-config-input-maxResultBytes"></div>
+        <div class="form-row"><label for="node-config-input-tlsKey">TLS private key</label><input type="password" id="node-config-input-tlsKey"></div>
+        <div class="form-row"><label for="node-config-input-tlsCert">TLS certificate</label><input type="password" id="node-config-input-tlsCert"></div>
+        <div class="form-row"><label for="node-config-input-redisMode">Redis mode</label><select id="node-config-input-redisMode"><option value="standalone">standalone</option><option value="cluster">cluster</option></select></div>
+        <div class="form-row"><label for="node-config-input-redisHost">Redis host</label><input type="text" id="node-config-input-redisHost" placeholder="${REDIS_HOST}"></div>
+        <div class="form-row"><label for="node-config-input-redisPort">Redis port</label><input type="number" id="node-config-input-redisPort"></div>
+        <div class="form-row"><label for="node-config-input-redisNodes">Cluster nodes JSON</label><textarea id="node-config-input-redisNodes" rows="3" placeholder='[{"host":"redis-1","port":6379}]'></textarea></div>
+        <div class="form-row"><label for="node-config-input-redisDb">Redis database</label><input type="number" id="node-config-input-redisDb" min="0"></div>
+        <div class="form-row"><label for="node-config-input-redisKeyPrefix">Redis key prefix</label><input type="text" id="node-config-input-redisKeyPrefix"></div>
+        <div class="form-row"><label for="node-config-input-redisPassword">Redis password</label><input type="password" id="node-config-input-redisPassword"></div>
+        <div class="form-row"><label for="node-config-input-redisConnectTimeoutMs">Redis connect timeout (ms)</label><input type="number" id="node-config-input-redisConnectTimeoutMs"></div>
+        <div class="form-row"><label for="node-config-input-redisCommandTimeoutMs">Redis command timeout (ms)</label><input type="number" id="node-config-input-redisCommandTimeoutMs"></div>
+        <div class="form-row"><label for="node-config-input-drainTimeoutMs">Drain timeout (ms)</label><input type="number" id="node-config-input-drainTimeoutMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-closeBudgetMs">Close budget (ms)</label><input type="number" id="node-config-input-closeBudgetMs" min="1" max="14000"></div>
+        <div class="form-row"><label for="node-config-input-completeDrainTimeoutMs">Complete drain timeout (ms)</label><input type="number" id="node-config-input-completeDrainTimeoutMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-leaseTtlMs">Lease TTL (ms)</label><input type="number" id="node-config-input-leaseTtlMs" min="1000"></div>
+        <div class="form-row"><label for="node-config-input-leaseSafetyMarginMs">Lease safety margin (ms)</label><input type="number" id="node-config-input-leaseSafetyMarginMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-leaseRenewEveryMs">Lease renewal interval (ms)</label><input type="number" id="node-config-input-leaseRenewEveryMs" min="100"></div>
+        <div class="form-row"><label for="node-config-input-dedupWindowMs">Deduplication window (ms)</label><input type="number" id="node-config-input-dedupWindowMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-resultTtlMs">Sync result buffer TTL (ms)</label><input type="number" id="node-config-input-resultTtlMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-asyncResultTtlMs">Async result retention (ms)</label><input type="number" id="node-config-input-asyncResultTtlMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-sessionReconnectGraceMs">Session reconnect grace (ms)</label><input type="number" id="node-config-input-sessionReconnectGraceMs" min="0"></div>
+        <div class="form-row"><label for="node-config-input-allowEvictingRedis">Allow volatile eviction</label><input type="checkbox" id="node-config-input-allowEvictingRedis"></div>
+        <div class="form-row"><label for="node-config-input-redisTls">Use Redis TLS</label><input type="checkbox" id="node-config-input-redisTls"></div>
+        <div class="form-row"><label for="node-config-input-maxQueueDepth">Max queue depth</label><input type="number" id="node-config-input-maxQueueDepth" min="1"></div>
+        <div class="form-row"><label for="node-config-input-maxQueueBytes">Max queue bytes</label><input type="number" id="node-config-input-maxQueueBytes" min="1"></div>
+        <div class="form-row"><label for="node-config-input-queueBytesFactor">Queue payload factor</label><input type="number" id="node-config-input-queueBytesFactor" min="1" step="any"></div>
+        <div class="form-row"><label for="node-config-input-queueEntryOverheadBytes">Per-entry queue overhead (bytes)</label><input type="number" id="node-config-input-queueEntryOverheadBytes" min="0"></div>
+        <div class="form-row"><label for="node-config-input-maxDeliveries">Max deliveries</label><input type="number" id="node-config-input-maxDeliveries" min="1"></div>
+        <div class="form-row"><label for="node-config-input-dlqRetentionMs">Dead-letter retention (ms)</label><input type="number" id="node-config-input-dlqRetentionMs" min="1"></div>
+        <div class="form-row"><label for="node-config-input-maxDlqEntries">Max dead-letter entries per operation</label><input type="number" id="node-config-input-maxDlqEntries" min="1"></div>
+        <div class="form-row"><label for="node-config-input-redisEvictionSampleMs">Redis eviction sample interval (ms)</label><input type="number" id="node-config-input-redisEvictionSampleMs" min="1000"></div>
+        <div class="form-row"><label for="node-config-input-defaultRate">Default rate (requests/sec)</label><input type="number" id="node-config-input-defaultRate" min="0.001" step="any"></div>
+        <div class="form-row"><label for="node-config-input-defaultBurst">Default burst</label><input type="number" id="node-config-input-defaultBurst" min="1"></div>
+    </div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-account">
+    <div class="form-row"><label for="node-config-input-name">Name</label><input type="text" id="node-config-input-name"></div>
+    <div class="form-row"><label for="node-config-input-server">Gateway server</label><input type="text" id="node-config-input-server"></div>
+    <div class="form-row"><label for="node-config-input-accountName">Account ID</label><input type="text" id="node-config-input-accountName" required></div>
+    <div class="form-row"><label for="node-config-input-operationPrefixes">Operation prefixes</label><input type="text" id="node-config-input-operationPrefixes" placeholder="billing/*, crm/customer/get"></div>
+    <div class="form-row"><label for="node-config-input-token">Token</label><input type="password" id="node-config-input-token"></div>
+    <div class="form-row"><label for="node-config-input-nextToken">Next token</label><input type="password" id="node-config-input-nextToken"></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-client-config">
+    <div class="form-row"><label for="node-config-input-name">Name</label><input type="text" id="node-config-input-name"></div>
+    <div class="form-row"><label for="node-config-input-url">Gateway URL</label><input type="url" id="node-config-input-url" placeholder="wss://gateway.example" required></div>
+    <div class="form-row"><label for="node-config-input-podId">POD ID</label><input type="text" id="node-config-input-podId" required></div>
+    <div class="form-row"><label for="node-config-input-token">Token</label><input type="password" id="node-config-input-token"></div>
+    <div class="form-row"><label for="node-config-input-connectTimeoutMs">Connect timeout (ms)</label><input type="number" id="node-config-input-connectTimeoutMs"></div>
+    <div class="form-row"><label for="node-config-input-deliveryMarginMs">Delivery margin (ms)</label><input type="number" id="node-config-input-deliveryMarginMs"></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-api-config">
+    <div class="form-row"><label for="node-config-input-name">Name</label><input type="text" id="node-config-input-name"></div>
+    <div class="form-row"><label for="node-config-input-apiName">API bucket name</label><input type="text" id="node-config-input-apiName" placeholder="billing-api"></div>
+    <div class="form-row"><label for="node-config-input-url">API URL</label><input type="url" id="node-config-input-url" required></div>
+    <div class="form-row"><label for="node-config-input-method">Method</label><select id="node-config-input-method"><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option></select></div>
+    <div class="form-row"><label for="node-config-input-tokenHeader">Token header</label><input type="text" id="node-config-input-tokenHeader"></div>
+    <div class="form-row"><label for="node-config-input-token">API token</label><input type="password" id="node-config-input-token"></div>
+    <div class="form-row"><label for="node-config-input-timeoutMs">Timeout (ms)</label><input type="number" id="node-config-input-timeoutMs"></div>
+    <div class="form-row"><label for="node-config-input-maxResponseBytes">Max response (bytes)</label><input type="number" id="node-config-input-maxResponseBytes"></div>
+    <div class="form-row"><label for="node-config-input-rate">API rate (requests/sec, 0 uses default)</label><input type="number" id="node-config-input-rate" min="0" step="any"></div>
+    <div class="form-row"><label for="node-config-input-burst">API burst</label><input type="number" id="node-config-input-burst" min="1"></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-call">
+    <div class="form-row"><ul id="gateway-call-tabs"></ul></div>
+    <div class="gateway-call-tab gateway-call-tab-general">
+        <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+        <div class="form-row"><label for="node-input-client">Client</label><input type="text" id="node-input-client"></div>
+        <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" placeholder="billing/calculateInvoice" required></div>
+    </div>
+    <div class="gateway-call-tab gateway-call-tab-reliability">
+        <div class="form-tips">Budgets in milliseconds</div>
+        <div class="form-row"><label for="node-input-queueTimeoutMs">Queue</label><input type="number" id="node-input-queueTimeoutMs" min="1"></div>
+        <div class="form-row"><label for="node-input-execTimeoutMs">Execution</label><input type="number" id="node-input-execTimeoutMs" min="1"></div>
+        <div class="form-row"><label for="node-input-deadlineMs">Total deadline</label><input type="number" id="node-input-deadlineMs" min="1"></div>
+        <div class="form-row"><label for="node-input-deliveryMarginMs">Delivery margin (ms)</label><input type="number" id="node-input-deliveryMarginMs" min="0"></div>
+    </div>
+    <div class="gateway-call-tab gateway-call-tab-advanced"><p>Request budgets from <code>msg.redkern.gateway</code> may only narrow these limits.</p></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-out">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-client">Client</label><input type="text" id="node-input-client"></div>
+    <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" required></div>
+    <div class="form-row"><label for="node-input-priority">Priority</label><select id="node-input-priority"><option value="normal">normal</option><option value="bulk">bulk</option></select></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-in">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-client">Client</label><input type="text" id="node-input-client"></div>
+    <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" required></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-adapter">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-server">Gateway server</label><input type="text" id="node-input-server"></div>
+    <div class="form-row"><label for="node-input-api">API configuration</label><input type="text" id="node-input-api"></div>
+    <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" placeholder="billing/calculateInvoice" required></div>
+    <div class="form-row"><label for="node-input-concurrency">Concurrency</label><input type="number" id="node-input-concurrency" min="1"></div>
+    <div class="form-row"><label for="node-input-queueTimeoutMs">Queue timeout (ms)</label><input type="number" id="node-input-queueTimeoutMs" min="1"></div>
+    <div class="form-row"><label for="node-input-execTimeoutMs">Execution timeout (ms)</label><input type="number" id="node-input-execTimeoutMs" min="1"></div>
+    <div class="form-row"><label for="node-input-deadlineMs">Total deadline (ms)</label><input type="number" id="node-input-deadlineMs" min="1"></div>
+    <div class="form-row"><label for="node-input-rate">Operation rate (requests/sec, 0 inherits)</label><input type="number" id="node-input-rate" min="0" step="any"></div>
+    <div class="form-row"><label for="node-input-burst">Operation burst</label><input type="number" id="node-input-burst" min="1"></div>
+    <div class="form-row"><label for="node-input-retryClass">Retry class</label><select id="node-input-retryClass"><option>never</option><option>safe</option><option>idempotent</option></select></div>
+    <div class="form-row"><label for="node-input-maxDeliveries">Max deliveries</label><input type="number" id="node-input-maxDeliveries" min="1"></div>
+    <div class="form-row"><label for="node-input-forwardIdempotencyKey">Forward Idempotency-Key</label><input type="checkbox" id="node-input-forwardIdempotencyKey"></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-worker-in">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-server">Gateway server</label><input type="text" id="node-input-server"></div>
+    <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" required></div>
+    <div class="form-row"><label for="node-input-execTimeoutMs">Execution timeout (ms)</label><input type="number" id="node-input-execTimeoutMs"></div>
+    <div class="form-row"><label for="node-input-concurrency">Concurrency</label><input type="number" id="node-input-concurrency" min="1"></div>
+    <div class="form-row"><label for="node-input-retryClass">Retry class</label><select id="node-input-retryClass"><option>never</option><option>safe</option><option>idempotent</option></select></div>
+    <div class="form-row"><label for="node-input-maxDeliveries">Max deliveries</label><input type="number" id="node-input-maxDeliveries" min="1"></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-worker-out">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-server">Gateway server</label><input type="text" id="node-input-server"></div>
+    <div class="form-row"><label for="node-input-operation">Operation</label><input type="text" id="node-input-operation" required></div>
+</script>
+
+<script type="text/html" data-template-name="redkern-gateway-metrics">
+    <div class="form-row"><label for="node-input-name">Name</label><input type="text" id="node-input-name"></div>
+    <div class="form-row"><label for="node-input-server">Gateway server</label><input type="text" id="node-input-server"></div>
+    <div class="form-row"><label for="node-input-events">Event filter</label><input type="text" id="node-input-events" placeholder="request.completed, upstream.completed"></div>
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-server-config">
+Starts the central Gateway WebSocket listener with bounded connections and payloads.
+
+### Inputs
+This configuration node does not receive messages.
+### Outputs
+This configuration node does not send messages.
+### Details
+The bind host is required. TLS uses the private key and certificate credentials together. Add account nodes and local executors before enabling client requests.
+Health endpoints are available at `/healthz/live` and `/healthz/ready` on the WebSocket port.
+### References
+- [Node-RED creating nodes](https://nodered.org/docs/creating-nodes/)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-account">
+Defines one authenticated client and the operation prefixes it may call.
+
+### Inputs
+This configuration node does not receive messages.
+### Outputs
+This configuration node does not send messages.
+### Details
+Store tokens in the password fields. A next token can overlap during rotation. `domain/*` includes nested operations; an exact name grants one operation, and `*` grants all operations.
+### References
+- [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-client-config">
+Connects one POD process session to a Gateway over WebSocket.
+
+### Inputs
+This configuration node does not receive messages.
+### Outputs
+This configuration node does not send messages.
+### Details
+Tokens are sent in the `Authorization` upgrade header. A new random `sessionId` is created for each Node-RED process start.
+### References
+- [Node-RED configuration nodes](https://nodered.org/docs/creating-nodes/config-nodes)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-api-config">
+Stores one upstream HTTP API address, method, and optional token credential.
+
+### Inputs
+This configuration node does not receive messages.
+### Outputs
+This configuration node does not send messages.
+### Details
+The API token is stored as a password credential. Adapter requests cannot override the configured authorization header.
+### References
+- [Node-RED credentials](https://nodered.org/docs/creating-nodes/credentials)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-call">
+Calls one named Gateway operation and returns its response on the first output.
+
+### Inputs
+<dl class="message-properties">
+<dt>payload <span class="property-type">any</span></dt><dd>Request data forwarded to the local executor.</dd>
+<dt class="optional">redkern.gateway <span class="property-type">object</span></dt><dd>Idempotency key and narrower queue, execution, and total deadline budgets.</dd>
+</dl>
+### Outputs
+<ol class="node-ports">
+<li>Result<dl class="message-properties"><dt>payload <span class="property-type">any</span></dt><dd>Executor response; other message properties are preserved.</dd></dl></li>
+<li>Error<dl class="message-properties"><dt>error <span class="property-type">object</span></dt><dd>Node-RED error containing the Gateway code and retryable flag.</dd></dl></li>
+</ol>
+### Details
+Configure one `domain/action` operation. Input budgets may only reduce configured maxima. No request is buffered while the POD is disconnected.
+### References
+- [Node-RED node status and errors](https://nodered.org/docs/creating-nodes/node-js)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-out">
+Submits an asynchronous Gateway operation event for delivery to a matching Gateway in node.
+
+### Inputs
+<dl class="message-properties"><dt>payload <span class="property-type">any</span></dt><dd>Event data sent to the operation executor.</dd><dt class="optional">redkern.gateway.idempotencyKey <span class="property-type">string</span></dt><dd>Optional key supplied by the flow.</dd></dl>
+### Outputs
+This sink node does not send messages.
+### Details
+Use a matching in node to receive the result. Durable delivery across Gateway restarts requires the Redis result-stream stage, which is not part of this alpha runtime.
+### References
+- [Node-RED sending messages](https://nodered.org/docs/creating-nodes/node-js)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-in">
+Emits results for one asynchronous Gateway operation.
+
+### Inputs
+This source node does not receive messages.
+### Outputs
+<dl class="message-properties"><dt>payload <span class="property-type">any</span></dt><dd>Result returned by the operation.</dd><dt>redkern.gateway <span class="property-type">object</span></dt><dd>Request ID and operation name.</dd></dl>
+### Details
+The current alpha routes event results to the connected client session. Redis-backed durable result streams and cross-session replay remain future work.
+### References
+- [Node-RED sending messages](https://nodered.org/docs/creating-nodes/node-js)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-adapter">
+Registers a local HTTP adapter for one Gateway operation.
+
+### Inputs
+This configuration node does not receive messages.
+### Outputs
+This configuration node does not send messages.
+### Details
+The adapter uses the API configuration, applies request query, path, and headers, and enforces response size and timeout limits. Pre-send connection failures and HTTP 429 may retry for every class. Post-send transient errors retry only when the operation is configured as <code>safe</code> or <code>idempotent</code>; <code>never</code> prevents those retries. Terminal failures are written to the Gateway Server dead-letter stream up to its configured delivery and retention limits.
+### References
+- [Node-RED configuration nodes](https://nodered.org/docs/creating-nodes/config-nodes)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-worker-in">
+Receives calls for one operation and starts the corresponding local flow.
+
+### Inputs
+This source node does not receive messages.
+### Outputs
+<dl class="message-properties"><dt>payload <span class="property-type">any</span></dt><dd>Request payload.</dd><dt>redkern.gateway <span class="property-type">object</span></dt><dd>Request ID, operation, idempotency key, deadline, and attempt.</dd></dl>
+### Details
+Connect this node to shared flow logic and finish the path with a matching worker-out node. Worker execution should be idempotent because a process failure can cause at-least-once delivery. Pre-send connection failures and HTTP 429 may retry for every class; post-send transient errors require <code>safe</code> or <code>idempotent</code>. Terminal failures are retained in the Gateway Server dead-letter stream.
+### References
+- [Node-RED sending messages](https://nodered.org/docs/creating-nodes/node-js)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-worker-out">
+Completes the matching Gateway worker request with the incoming message.
+
+### Inputs
+<dl class="message-properties"><dt>redkern.gateway.requestId <span class="property-type">string</span></dt><dd>Correlation ID copied from worker-in.</dd><dt>payload <span class="property-type">any</span></dt><dd>Response returned to the caller.</dd></dl>
+### Outputs
+This sink node does not send messages.
+### Details
+The configured operation must match the worker-in operation that created the request.
+### References
+- [Node-RED message properties](https://nodered.org/docs/creating-nodes/)
+</script>
+
+<script type="text/markdown" data-help-name="redkern-gateway-metrics">
+Outputs Gateway lifecycle and latency events from the configured Gateway Server.
+
+### Inputs
+This source node does not receive messages.
+### Outputs
+<dl class="message-properties"><dt>payload <span class="property-type">object</span></dt><dd>Event metadata, also available as <code>msg.metric</code>.</dd><dt>topic <span class="property-type">string</span></dt><dd><code>pod-gateway/&lt;event&gt;</code>.</dd><dt>gateway <span class="property-type">object</span></dt><dd>Stable event, request, operation, status, and timestamp fields.</dd></dl>
+### Details
+Leave the event filter empty for all events, or enter a comma-separated list such as <code>request.completed, upstream.completed</code>. Events contain no request payloads, headers, or credentials. The separate token-protected internal endpoint exposes Prometheus text metrics.
+### References
+- [Node-RED message properties](https://nodered.org/docs/creating-nodes/)
+</script>

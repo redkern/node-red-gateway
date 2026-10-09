@@ -1,0 +1,32 @@
+{
+  "hello": {
+    "type": "hello",
+    "protocolVersion": "1.0",
+    "podId": "legacy-pod",
+    "instanceId": "legacy-instance",
+    "token": "fixture-token"
+  },
+  "call": {
+    "type": "call",
+    "requestId": "legacy-request-001",
+    "operation": "billing/calculateInvoice",
+    "payload": { "invoiceId": "INV-1001" },
+    "_request": { "params": {}, "query": {}, "headers": {} },
+    "priority": "normal",
+    "deadlineAt": "2026-10-08T12:00:00.000Z",
+    "idempotencyKey": "legacy-idempotency-001"
+  },
+  "result": {
+    "type": "result",
+    "requestId": "legacy-request-001",
+    "operation": "billing/calculateInvoice",
+    "ok": true,
+    "payload": { "total": 125 },
+    "durationMs": 17,
+    "response": { "statusCode": 200 },
+    "_request": {
+      "input": { "payload": { "invoiceId": "INV-1001" } },
+      "output": { "statusCode": 200, "body": { "total": 125 } }
+    }
+  }
+}

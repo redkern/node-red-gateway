@@ -1,0 +1,22 @@
+{
+  "nodes": {
+    "call": "call",
+    "out": "out",
+    "in": "in",
+    "adapter": "adapter",
+    "workerIn": "worker in",
+    "workerOut": "worker out",
+    "metrics": "metrics"
+  },
+  "tabs": {
+    "general": "General",
+    "reliability": "Reliability",
+    "advanced": "Advanced"
+  },
+  "ports": {
+    "request": "request",
+    "result": "result",
+    "error": "error",
+    "metrics": "metrics"
+  }
+}

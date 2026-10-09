@@ -1,0 +1,13 @@
+{
+  "inFlight": { "requestId": "legacy-request-001", "consumerId": "legacy-consumer" },
+  "completed": {
+    "requestId": "legacy-request-001",
+    "response": {
+      "type": "result",
+      "requestId": "legacy-request-001",
+      "operation": "billing/calculateInvoice",
+      "ok": true,
+      "payload": { "total": 125 }
+    }
+  }
+}

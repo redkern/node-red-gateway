@@ -1,0 +1,93 @@
+[
+  {
+    "id": "comment-gateway-call",
+    "type": "comment",
+    "z": "flow-gateway-example",
+    "name": "Configure the client URL, POD ID, and token before deploying",
+    "info": "This example demonstrates a synchronous call from a POD to a locally registered Gateway operation.",
+    "x": 340,
+    "y": 80,
+    "wires": []
+  },
+  {
+    "id": "flow-gateway-example",
+    "type": "tab",
+    "label": "Gateway Call Example",
+    "disabled": false,
+    "info": "",
+    "env": []
+  },
+  {
+    "id": "gateway-client-example",
+    "type": "redkern-gateway-client-config",
+    "name": "Central Gateway",
+    "url": "wss://${GATEWAY_HOST}:${GATEWAY_PORT}",
+    "podId": "${POD_ID}",
+    "connectTimeoutMs": 10000,
+    "deliveryMarginMs": 2000
+  },
+  {
+    "id": "inject-gateway-example",
+    "type": "inject",
+    "z": "flow-gateway-example",
+    "name": "Call invoice operation",
+    "props": [
+      { "p": "payload" }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"invoiceId\":\"INV-1001\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 160,
+    "wires": [["gateway-call-example"]]
+  },
+  {
+    "id": "gateway-call-example",
+    "type": "redkern-gateway-call",
+    "z": "flow-gateway-example",
+    "name": "Calculate invoice",
+    "client": "gateway-client-example",
+    "operation": "billing/calculateInvoice",
+    "queueTimeoutMs": 30000,
+    "execTimeoutMs": 30000,
+    "deadlineMs": 60000,
+    "deliveryMarginMs": 2000,
+    "x": 380,
+    "y": 160,
+    "wires": [["debug-gateway-result"], ["debug-gateway-error"]]
+  },
+  {
+    "id": "debug-gateway-result",
+    "type": "debug",
+    "z": "flow-gateway-example",
+    "name": "Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 610,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "debug-gateway-error",
+    "type": "debug",
+    "z": "flow-gateway-example",
+    "name": "Gateway error",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "error",
+    "targetType": "msg",
+    "x": 610,
+    "y": 200,
+    "wires": []
+  }
+]

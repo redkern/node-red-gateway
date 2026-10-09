@@ -1,0 +1,58 @@
+{
+  "name": "@redkern/node-red-gateway",
+  "version": "1.0.0",
+  "description": "Secure Node-RED gateway palette for WebSocket clients and local flow executors",
+  "keywords": ["node-red", "node-red-contrib", "gateway", "websocket", "redis"],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/redkern/node-red-gateway.git"
+  },
+  "bin": {
+    "redkern-gateway-migrate": "bin/migrate-flow.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin/",
+    "*.js",
+    "*.html",
+    "lib/",
+    "nodes/",
+    "locales/",
+    "icons/",
+    "examples/",
+    "README.md",
+    "CHANGELOG.md",
+    "RELEASING.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --unhandled-rejections=strict --test test/unit/*.test.js",
+    "test:integration": "node --unhandled-rejections=strict --test test/integration/*.test.js",
+    "test:load": "node --unhandled-rejections=strict scripts/load-test.js",
+    "check:pack": "node scripts/check-pack.js",
+    "check:release": "node scripts/check-release.js",
+    "verify:requirements": "node scripts/check-req-ids.js"
+  },
+  "dependencies": {
+    "@redkern/node-red-kit": "^1.0.1",
+    "ioredis": "^6.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "node-red": "^5.0.7",
+    "node-red-node-test-helper": "0.3.6"
+  },
+  "node-red": {
+    "version": ">=4.1.0 <6.0.0",
+    "nodes": {
+      "redkern-gateway": "nodes/gateway.js"
+    }
+  }
+}

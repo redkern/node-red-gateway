@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+        node-red: ["4.1.15", "5.0.7"]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false "node-red@${{ matrix.node-red }}"
+      - name: Check stable version, tag, and production SLOs
+        run: npm run check:release
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MAX_P95_MS: "500"
+          GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
+      - run: npm test
+      - run: npm run test:integration
+        env:
+          REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
+      - run: npm run test:load
+        env:
+          REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
+          GATEWAY_LOAD_REQUESTS: "5000"
+          GATEWAY_LOAD_CONCURRENCY: "100"
+          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MAX_P95_MS: "500"
+          GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
+      - run: npm run verify:requirements
+      - run: npm audit --omit=dev
+      - run: npm run check:pack
+
+  publish:
+    needs: verify
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.23.3
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@12.2.0
+      - run: npm ci
+      - name: Verify release tag and package metadata
+        run: npm run check:release
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MAX_P95_MS: "500"
+          GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
+      - run: npm publish --access public --provenance
