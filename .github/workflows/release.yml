@@ -57,7 +57,7 @@ jobs:
           REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
           GATEWAY_LOAD_REQUESTS: "5000"
           GATEWAY_LOAD_CONCURRENCY: "100"
-          GATEWAY_LOAD_MIN_RPS: ${{ matrix.node == 24 && matrix['node-red'] == '4.1.15' && '1500' || '' }}
+          GATEWAY_LOAD_MIN_RPS: "1500"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
       - run: npm run verify:requirements
