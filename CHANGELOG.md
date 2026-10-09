@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1 - 2026-10-09
+
+- Publish through GitHub Actions using npm trusted publishing.
+
 ## 1.0.0 - 2026-10-09
 
 - Add GCRA capacity snapshots, protocol 1.1 capacity queries, and coalesced rate-limit decisions.

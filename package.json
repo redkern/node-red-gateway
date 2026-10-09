@@ -1,6 +1,6 @@
 {
   "name": "@redkern/node-red-gateway",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Secure Node-RED gateway palette for WebSocket clients and local flow executors",
   "keywords": ["node-red", "node-red-contrib", "gateway", "websocket", "redis"],
   "license": "Apache-2.0",
