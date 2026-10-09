@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 - 2026-10-09
+
+- Add example flows covering every Gateway runtime node and enforce example coverage during package checks.
+- Improve palette and workspace node labels, editor tabs, and port labels.
+
 ## 1.0.1 - 2026-10-09
 
 - Publish through GitHub Actions using npm trusted publishing.

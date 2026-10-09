@@ -33,7 +33,15 @@ test('each registered runtime node has a Node-RED editor definition, template, a
   }
   assert.match(editor, /credentials:\s*\{ token:\s*\{ type: "password" \}/);
   assert.match(editor, /const color = "#A9DCD6"/);
-  assert.equal([...editor.matchAll(/paletteLabel:/g)].length, 7);
+  assert.deepEqual([...editor.matchAll(/paletteLabel:\s*"([^"]+)"/g)].map((match) => match[1]), [
+    'Gateway Server', 'Gateway Account', 'Gateway Client', 'Gateway API', 'Gateway Call', 'Gateway Event Out',
+    'Async Result In', 'HTTP Adapter', 'Worker Request In', 'Worker Result Out', 'Gateway Metrics'
+  ]);
+  for (const label of ['Gateway Call', 'Gateway Event Out', 'Async Result In', 'HTTP Adapter', 'Worker Request In', 'Worker Result Out', 'Gateway Metrics']) {
+    assert.ok(editor.includes(`this.operation || "${label}"`) || editor.includes(`this.name, "${label}"`), `missing clear default label ${label}`);
+  }
+  assert.match(editor, /const tabLabels = \{ general: "General", reliability: "Reliability", advanced: "Advanced" \}/);
+  assert.doesNotMatch(editor, /RED\._\(/);
   const icons = [...editor.matchAll(/icon: "([^"]+\.svg)"/g)].map((match) => match[1]);
   assert.equal(new Set(icons).size, icons.length);
   for (const icon of icons) {

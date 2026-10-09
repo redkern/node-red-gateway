@@ -3,6 +3,7 @@
     "use strict";
     const category = "redkern gateway";
     const color = "#A9DCD6";
+    const tabLabels = { general: "General", reliability: "Reliability", advanced: "Advanced" };
     function label(value, fallback) { return value || fallback; }
     function setupTabs(prefix) {
         const tabs = RED.tabs.create({ id: prefix + "-tabs", onchange: function (tab) {
@@ -10,13 +11,13 @@
             $("." + prefix + "-tab-" + tab.id.split("-").pop()).show();
         }});
         ["general", "reliability", "advanced"].forEach(function (name) {
-            tabs.addTab({ id: prefix + "-" + name, label: RED._("redkern-node-red-gateway:tabs." + name) });
+            tabs.addTab({ id: prefix + "-" + name, label: tabLabels[name] });
         });
         tabs.activateTab(prefix + "-general");
     }
 
     RED.nodes.registerType("redkern-gateway-server-config", {
-        category: "config", color: color, defaults: {
+        category: "config", color: color, paletteLabel: "Gateway Server", defaults: {
             name: { value: "" }, host: { value: "", required: true }, port: { value: "", required: true },
             maxPayload: { value: 1048576 }, maxConnections: { value: 500 }, maxUnauthenticatedConnections: { value: 50 },
             helloTimeoutMs: { value: 5000 }, maxInFlightPerConnection: { value: 1000 }, maxResultBytes: { value: 262144 },
@@ -37,21 +38,21 @@
         oneditprepare: function () { setupTabs("gateway-server"); }
     });
     RED.nodes.registerType("redkern-gateway-account", {
-        category: "config", color: color, defaults: {
+        category: "config", color: color, paletteLabel: "Gateway Account", defaults: {
             name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
             accountName: { value: "", required: true }, operationPrefixes: { value: "", required: true }
         }, credentials: { token: { type: "password" }, nextToken: { type: "password" } },
         label: function () { return label(this.name, this.accountName || "Gateway Account"); }
     });
     RED.nodes.registerType("redkern-gateway-client-config", {
-        category: "config", color: color, defaults: {
+        category: "config", color: color, paletteLabel: "Gateway Client", defaults: {
             name: { value: "" }, url: { value: "", required: true }, podId: { value: "", required: true },
             connectTimeoutMs: { value: 10000 }, deliveryMarginMs: { value: 2000 }
         }, credentials: { token: { type: "password" } },
         label: function () { return label(this.name, this.podId || "Gateway Client"); }
     });
     RED.nodes.registerType("redkern-gateway-api-config", {
-        category: "config", color: color, defaults: {
+        category: "config", color: color, paletteLabel: "Gateway API", defaults: {
             name: { value: "" }, apiName: { value: "" }, url: { value: "", required: true }, method: { value: "GET" },
             tokenHeader: { value: "Authorization" }, timeoutMs: { value: 30000 }, maxResponseBytes: { value: 262144 },
             rate: { value: 0 }, burst: { value: 1 }
@@ -60,71 +61,71 @@
     });
     RED.nodes.registerType("redkern-gateway-call", {
         category: category, color: color, icon: "redkern-gateway-call.svg", inputs: 1, outputs: 2,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.call"),
-        inputLabels: RED._("redkern-node-red-gateway:ports.request"),
-        outputLabels: [RED._("redkern-node-red-gateway:ports.result"), RED._("redkern-node-red-gateway:ports.error")],
+        paletteLabel: "Gateway Call",
+        inputLabels: "Request",
+        outputLabels: ["Result", "Error"],
         defaults: {
             name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
             operation: { value: "", required: true }, queueTimeoutMs: { value: 30000 }, execTimeoutMs: { value: 30000 },
             deadlineMs: { value: 60000 }, deliveryMarginMs: { value: 2000 }
-        }, label: function () { return label(this.name, this.operation || "call"); }, oneditprepare: function () { setupTabs("gateway-call"); }
+        }, label: function () { return label(this.name, this.operation || "Gateway Call"); }, oneditprepare: function () { setupTabs("gateway-call"); }
     });
     RED.nodes.registerType("redkern-gateway-out", {
         category: category, color: color, icon: "redkern-gateway-out.svg", inputs: 1, outputs: 0,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.out"),
-        inputLabels: RED._("redkern-node-red-gateway:ports.request"),
+        paletteLabel: "Gateway Event Out",
+        inputLabels: "Request",
         defaults: {
             name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
             operation: { value: "", required: true }, priority: { value: "normal" }
-        }, label: function () { return label(this.name, this.operation || "out"); }
+        }, label: function () { return label(this.name, this.operation || "Gateway Event Out"); }
     });
     RED.nodes.registerType("redkern-gateway-in", {
         category: category, color: color, icon: "redkern-gateway-in.svg", inputs: 0, outputs: 1,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.in"),
-        outputLabels: [RED._("redkern-node-red-gateway:ports.result")],
+        paletteLabel: "Async Result In",
+        outputLabels: ["Result"],
         defaults: {
             name: { value: "" }, client: { value: "", type: "redkern-gateway-client-config", required: true },
             operation: { value: "", required: true }
-        }, label: function () { return label(this.name, this.operation || "in"); }
+        }, label: function () { return label(this.name, this.operation || "Async Result In"); }
     });
     RED.nodes.registerType("redkern-gateway-adapter", {
         category: category, color: color, icon: "redkern-gateway-adapter.svg", inputs: 0, outputs: 0,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.adapter"),
+        paletteLabel: "HTTP Adapter",
         defaults: {
             name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
             api: { value: "", type: "redkern-gateway-api-config", required: true }, operation: { value: "", required: true },
             concurrency: { value: 32 }, queueTimeoutMs: { value: 30000 }, execTimeoutMs: { value: 30000 },
             deadlineMs: { value: 60000 }, rate: { value: 0 }, burst: { value: 1 },
             retryClass: { value: "never" }, maxDeliveries: { value: 3 }, forwardIdempotencyKey: { value: false }
-        }, label: function () { return label(this.name, this.operation || "adapter"); }
+        }, label: function () { return label(this.name, this.operation || "HTTP Adapter"); }
     });
     RED.nodes.registerType("redkern-gateway-worker-in", {
         category: category, color: color, icon: "redkern-gateway-worker-in.svg", inputs: 0, outputs: 1,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.workerIn"),
-        outputLabels: [RED._("redkern-node-red-gateway:ports.request")],
+        paletteLabel: "Worker Request In",
+        outputLabels: ["Request"],
         defaults: {
             name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
             operation: { value: "", required: true }, execTimeoutMs: { value: 30000 }, concurrency: { value: 32 },
             retryClass: { value: "never" }, maxDeliveries: { value: 3 }
-        }, label: function () { return label(this.name, this.operation || "worker in"); }
+        }, label: function () { return label(this.name, this.operation || "Worker Request In"); }
     });
     RED.nodes.registerType("redkern-gateway-worker-out", {
         category: category, color: color, icon: "redkern-gateway-worker-out.svg", inputs: 1, outputs: 0,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.workerOut"),
-        inputLabels: RED._("redkern-node-red-gateway:ports.result"),
+        paletteLabel: "Worker Result Out",
+        inputLabels: "Result",
         defaults: {
             name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true },
             operation: { value: "", required: true }
-        }, label: function () { return label(this.name, this.operation || "worker out"); }
+        }, label: function () { return label(this.name, this.operation || "Worker Result Out"); }
     });
     RED.nodes.registerType("redkern-gateway-metrics", {
         category: category, color: color, icon: "redkern-gateway-metrics.svg", inputs: 0, outputs: 1,
-        paletteLabel: RED._("redkern-node-red-gateway:nodes.metrics"),
-        outputLabels: [RED._("redkern-node-red-gateway:ports.metrics")],
+        paletteLabel: "Gateway Metrics",
+        outputLabels: ["Metrics"],
         defaults: {
             name: { value: "" }, server: { value: "", type: "redkern-gateway-server-config", required: true }, events: { value: "" }
         },
-        label: function () { return label(this.name, "metrics"); }
+        label: function () { return label(this.name, "Gateway Metrics"); }
     });
 }());
 </script>

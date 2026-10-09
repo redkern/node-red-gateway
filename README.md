@@ -64,7 +64,7 @@ Gateway Metrics emits metadata-only messages on `msg.topic` (`pod-gateway/<event
 
 ## Examples and compatibility
 
-Import `examples/basic-call.json` from the Node-RED import menu and set the client URL, POD ID, and token. The frozen protocol 2.1.x hello/call/result and idempotency JSON shapes used by compatibility tests are in `test/fixtures/legacy/`.
+Import `examples/basic-call.json` from the Node-RED import menu and set the client URL, POD ID, and token. Import `examples/gateway-services.json` for event output, async results, worker request/response, HTTP adapter, and metrics examples; configure its server, Redis, account, client, and API settings before deploying. The frozen protocol 2.1.x hello/call/result and idempotency JSON shapes used by compatibility tests are in `test/fixtures/legacy/`.
 
 ## Migration
 
