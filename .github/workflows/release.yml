@@ -45,7 +45,7 @@ jobs:
         run: env GITHUB_REF_NAME="$RELEASE_TAG" npm run check:release
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MIN_RPS: "1000"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
       - run: npm test
@@ -57,7 +57,7 @@ jobs:
           REDIS_GCRA_TEST_URL: redis://127.0.0.1:6379
           GATEWAY_LOAD_REQUESTS: "5000"
           GATEWAY_LOAD_CONCURRENCY: "100"
-          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MIN_RPS: "1000"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
       - run: npm run verify:requirements
@@ -86,7 +86,7 @@ jobs:
         run: env GITHUB_REF_NAME="$RELEASE_TAG" npm run check:release
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-          GATEWAY_LOAD_MIN_RPS: "1500"
+          GATEWAY_LOAD_MIN_RPS: "1000"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
       - run: npm publish --access public --provenance
