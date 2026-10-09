@@ -42,9 +42,9 @@ jobs:
       - run: npm ci
       - run: npm install --no-save --package-lock=false "node-red@${{ matrix.node-red }}"
       - name: Check stable version, tag, and production SLOs
-        run: npm run check:release
+        run: env GITHUB_REF_NAME="$RELEASE_TAG" npm run check:release
         env:
-          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GATEWAY_LOAD_MIN_RPS: "1500"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
@@ -83,9 +83,9 @@ jobs:
       - run: npm install --global npm@12.2.0
       - run: npm ci
       - name: Verify release tag and package metadata
-        run: npm run check:release
+        run: env GITHUB_REF_NAME="$RELEASE_TAG" npm run check:release
         env:
-          GITHUB_REF_NAME: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           GATEWAY_LOAD_MIN_RPS: "1500"
           GATEWAY_LOAD_MAX_P95_MS: "500"
           GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT: "0.1"
