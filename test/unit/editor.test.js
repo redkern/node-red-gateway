@@ -46,7 +46,12 @@ test('each registered runtime node has a Node-RED editor definition, template, a
   assert.equal(new Set(icons).size, icons.length);
   for (const icon of icons) {
     assert.match(icon, /^redkern-gateway-/);
-    assert.ok(fs.existsSync(path.join(root, 'icons', icon)), `missing icon ${icon}`);
+    const iconPath = path.join(root, 'icons', icon);
+    assert.ok(fs.existsSync(iconPath), `missing icon ${icon}`);
+    const iconContent = fs.readFileSync(iconPath, 'utf8');
+    assert.match(iconContent, /viewBox="0 0 40 60"/);
+    assert.doesNotMatch(iconContent, /M8 31V21a12 12/);
+    if (icon === 'redkern-gateway-adapter.svg') assert.match(iconContent, /M20 47v6/);
   }
   assert.match(editor, /data-template-name="redkern-gateway-call"[\s\S]*?node-input-client/);
   assert.match(editor, /data-template-name="redkern-gateway-account"[\s\S]*?node-config-input-server/);

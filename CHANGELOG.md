@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3 - 2026-10-12
+
+- Replace repeated Gateway bell artwork with distinct node-specific icons and center the adapter plug.
+
 ## 1.0.2 - 2026-10-09
 
 - Add example flows covering every Gateway runtime node and enforce example coverage during package checks.

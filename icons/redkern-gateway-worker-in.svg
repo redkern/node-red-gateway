@@ -1,5 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <path fill="#fff" d="M14 56V30a18 18 0 0 1 36 0v26h-7V30a11 11 0 0 0-22 0v26zM7 53h50v7H7z"/>
-  <path d="M13 39h24m-7-7 7 7-7 7" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
-  <circle cx="47" cy="40" r="5" fill="none" stroke="#fff" stroke-width="3"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="60" viewBox="0 0 40 60">
+  <title>Worker request in</title>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.8">
+    <path d="M20 9v15m-6-6 6 6 6-6m-6 6v7M10 31h20m-20 0v8m20-8v8"/>
+    <circle cx="10" cy="43" r="3"/>
+    <circle cx="30" cy="43" r="3"/>
+  </g>
 </svg>
