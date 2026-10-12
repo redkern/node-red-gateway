@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.4 - 2026-10-12
+
+- Place Node-RED node icons beside their runtime/editor files so the editor resolves the custom SVGs.
+
 ## 1.0.3 - 2026-10-12
 
 - Replace repeated Gateway bell artwork with distinct node-specific icons and center the adapter plug.

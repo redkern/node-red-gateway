@@ -46,7 +46,7 @@ test('each registered runtime node has a Node-RED editor definition, template, a
   assert.equal(new Set(icons).size, icons.length);
   for (const icon of icons) {
     assert.match(icon, /^redkern-gateway-/);
-    const iconPath = path.join(root, 'icons', icon);
+    const iconPath = path.join(root, 'nodes', 'icons', icon);
     assert.ok(fs.existsSync(iconPath), `missing icon ${icon}`);
     const iconContent = fs.readFileSync(iconPath, 'utf8');
     assert.match(iconContent, /viewBox="0 0 40 60"/);

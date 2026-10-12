@@ -26,6 +26,12 @@ for (const [type, path] of Object.entries(packageJson['node-red'].nodes)) {
   assert(files.has(path), `npm tarball is missing registered node file ${path}`);
 }
 const editor = fs.readFileSync(path.join(__dirname, '../nodes/gateway.html'), 'utf8');
+const nodeIcons = [...editor.matchAll(/icon: "([^"]+\.svg)"/g)].map((match) => match[1]);
+for (const icon of nodeIcons) {
+  const iconPath = `nodes/icons/${icon}`;
+  assert(files.has(iconPath), `npm tarball is missing Node-RED icon ${iconPath}`);
+  assert(fs.existsSync(path.join(__dirname, '..', iconPath)), `Node-RED icon must be beside its node files: ${iconPath}`);
+}
 const runtimeNodeTypes = [...editor.matchAll(
   /RED\.nodes\.registerType\(["']([^"']+)["'],\s*\{\s*category:\s*category/g
 )].map((match) => match[1]);
