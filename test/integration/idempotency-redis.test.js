@@ -84,3 +84,46 @@ test('protocol 1.1 separates dedup marker TTL from ACK-removable sync result buf
     await handle.close();
   }
 });
+
+test('protocol 1.1 buffers and resumes a sync result without an idempotency key', {
+  skip: !redisUrl && 'Set REDIS_GCRA_TEST_URL to run the Redis integration test'
+}, async () => {
+  const endpoint = new URL(redisUrl);
+  const handle = createRedisClient({
+    ioredis: Redis,
+    domain: 'gateway',
+    configId: 'idem-test-unkeyed-result',
+    role: 'shared',
+    mode: 'standalone',
+    host: endpoint.hostname,
+    port: Number(endpoint.port || 6379),
+    ...(endpoint.password ? { password: decodeURIComponent(endpoint.password) } : {}),
+    logger: { error() {} }
+  });
+  await handle.connect();
+  const redis = handle.client;
+  const keyPrefix = `gateway-idem-unkeyed-${process.pid}`;
+  const store = new RedisIdempotencyStore({ redis, keyPrefix, consumerId: 'unkeyed-consumer', resultTtlMs: 5000 });
+  const request = {
+    protocolVersion: '1.1', client: 'client-a', podId: 'pod-a', sessionId: 'session-a',
+    operation: 'billing/calculate', requestId: 'unkeyed-1'
+  };
+  const key = `${keyPrefix}:result:{billing/calculate}:unkeyed-1`;
+  try {
+    await redis.del(key);
+    const response = { type: 'result', requestId: request.requestId, response: { total: 42 } };
+    const claim = await store.bufferResult(request, response);
+
+    const resumed = await store.resume({
+      client: request.client, podId: request.podId, sessionId: request.sessionId,
+      operations: [request.operation], requestIds: [request.requestId]
+    });
+    assert.deepEqual(resumed, [{ key, requestId: request.requestId, response }]);
+    assert.ok(await redis.pttl(key) > 0);
+    assert.equal(await store.ack(claim), true);
+    assert.equal(await redis.exists(key), 0);
+  } finally {
+    await redis.del(key);
+    await handle.close();
+  }
+});

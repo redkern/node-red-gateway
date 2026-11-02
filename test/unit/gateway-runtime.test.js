@@ -370,6 +370,155 @@ test('async result PEL is reassigned only after session reconnect grace expires'
   await runtime.close();
 });
 
+test('a later session reclaims async results left pending by an expired session', async () => {
+  let reclaim;
+  const runtime = new GatewayRuntime({
+    host: '127.0.0.1', port: 9561,
+    asyncResults: {
+      async ensureGroup() {},
+      async readPending() { return []; },
+      async read() { return []; },
+      async reclaimAbandoned(client, operation, nextConsumer, activeConsumers, minIdleMs) {
+        reclaim = { client, operation, nextConsumer, activeConsumers, minIdleMs };
+        return [{
+          stream: 'results', streamId: '2-0',
+          entry: { requestId: 'async-late', operation: 'billing/a', response: { value: 7 } }
+        }];
+      }
+    }
+  });
+  const sent = [];
+  const connection = {
+    account: { name: 'client-a', operationPrefixes: ['billing/*'] },
+    podId: 'pod-new', sessionId: 'session-new',
+    socket: { readyState: WebSocket.OPEN, send(value) { sent.push(JSON.parse(value)); } }
+  };
+
+  await runtime._subscribeAsyncResults(connection, 'billing/a');
+
+  assert.equal(reclaim.client, 'client-a');
+  assert.equal(reclaim.operation, 'billing/a');
+  assert.equal(reclaim.nextConsumer, 'pod-new:session-new');
+  assert.deepEqual([...reclaim.activeConsumers], ['pod-new:session-new']);
+  assert.equal(sent[0].requestId, 'async-late');
+  await runtime.close();
+});
+
+test('async result delivery rotates sessions and respects the unacked ceiling', async () => {
+  let nextId = 0;
+  let readCount = 0;
+  const runtime = new GatewayRuntime({
+    host: '127.0.0.1', port: 9563, maxUnackedResultsPerSession: 1,
+    asyncResults: {
+      async ensureGroup() {},
+      async readPending() { return []; },
+      async reclaimAbandoned() { return []; },
+      async read(_client, _operation, count, consumerId) {
+        readCount += 1;
+        assert.equal(count, 1);
+        return [{
+          stream: 'results', streamId: `${++nextId}-0`,
+          entry: { requestId: `async-${nextId}`, operation: 'billing/a', response: { consumerId } }
+        }];
+      }
+    }
+  });
+  const makeConnection = (podId) => {
+    const sent = [];
+    return {
+      sent,
+      connection: {
+        account: { name: 'client-a', operationPrefixes: ['billing/*'] },
+        podId, sessionId: `session-${podId}`,
+        socket: { readyState: WebSocket.OPEN, send(value) { sent.push(JSON.parse(value)); } }
+      }
+    };
+  };
+  const first = makeConnection('pod-a');
+  const second = makeConnection('pod-b');
+
+  await runtime._subscribeAsyncResults(first.connection, 'billing/a');
+  await runtime._subscribeAsyncResults(second.connection, 'billing/a');
+  await runtime._deliverAsyncAvailable('client-a', 'billing/a');
+
+  assert.equal(first.sent[0].requestId, 'async-1');
+  assert.equal(second.sent[0].requestId, 'async-2');
+  assert.equal(first.sent.length, 1);
+  assert.equal(second.sent.length, 1);
+  assert.equal(readCount, 2);
+  await runtime.close();
+});
+
+test('result messages stay out of a WebSocket buffer above its configured ceiling', () => {
+  const runtime = new GatewayRuntime({ host: '127.0.0.1', port: 9564, maxBufferedBytes: 128 });
+  const sent = [];
+  const connection = {
+    socket: {
+      readyState: WebSocket.OPEN,
+      bufferedAmount: 128,
+      send(value) { sent.push(value); },
+      close() {}
+    }
+  };
+
+  assert.equal(runtime._send(connection, { type: 'async.result', requestId: 'buffered-result' }), false);
+  assert.equal(sent.length, 0);
+  assert.ok(connection.slowConsumerTimer);
+  clearInterval(connection.slowConsumerTimer);
+  connection.slowConsumerTimer = undefined;
+});
+
+test('sync results without an idempotency key are buffered before delivery', async () => {
+  let buffered;
+  const runtime = new GatewayRuntime({
+    host: '127.0.0.1', port: 9566,
+    idempotency: {
+      async bufferResult(task, response) {
+        buffered = { task, response };
+        return { keys: { legacy: false, result: 'gateway:result:{billing/a}:sync-1' } };
+      }
+    }
+  });
+  const sent = [];
+  const connection = {
+    inFlight: 1,
+    socket: { readyState: WebSocket.OPEN, bufferedAmount: 0, send(value) { sent.push(JSON.parse(value)); } }
+  };
+  const task = {
+    requestId: 'sync-1', protocolVersion: '1.1', operation: 'billing/a',
+    client: 'client-a', podId: 'pod-a', sessionId: 'session-a', message: { payload: {} }
+  };
+  runtime.pendingRequests.set(task.requestId, connection);
+
+  await runtime._deliverQueuedResult(task, { value: 42 }, 'passthrough');
+
+  assert.equal(buffered.task, task);
+  assert.equal(buffered.response.type, 'result');
+  assert.deepEqual(sent[0].response, { value: 42 });
+  assert.equal(runtime.pendingResultAcks.get(task.requestId).keys.result, 'gateway:result:{billing/a}:sync-1');
+});
+
+test('slow consumers are closed when the socket buffer stays full for ten seconds', async () => {
+  const runtime = new GatewayRuntime({ host: '127.0.0.1', port: 9565, maxBufferedBytes: 128 });
+  runtime.slowConsumerTimeoutMs = 20;
+  runtime.slowConsumerCheckMs = 1;
+  let closed;
+  const connection = {
+    socket: {
+      readyState: WebSocket.OPEN,
+      bufferedAmount: 128,
+      send() {},
+      close(code, reason) { closed = { code, reason }; }
+    }
+  };
+
+  assert.equal(runtime._send(connection, { type: 'async.result', requestId: 'slow-result' }), false);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  assert.deepEqual(closed, { code: 1013, reason: 'SLOW_CONSUMER' });
+  assert.equal(connection.slowConsumerTimer, undefined);
+});
+
 test('request budgets can only narrow operation queue, execution, and deadline maxima (GW-DL-3)', async () => {
   const queue = Object.assign(new EventEmitter(), { async enqueue(task) { this.task = task; return { streamId: '1-0', depth: 1 }; } });
   queue.footprintBytes = async () => 0;

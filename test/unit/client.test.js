@@ -92,3 +92,37 @@ test('POD client falls back to protocol 1.0 and reads the legacy result envelope
   assert.deepEqual(await client.call('billing/getInvoice', { payload: { invoiceId: 'old' } }), { invoiceId: 'old' });
   assert.equal(typeof legacyCall.deadlineAt, 'string');
 });
+
+test('POD client ACKs failed protocol 1.1 results', async (context) => {
+  const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve) => server.once('listening', resolve));
+  const { port } = server.address();
+  let resolveAck;
+  let requestId;
+  const ackReceived = new Promise((resolve) => { resolveAck = resolve; });
+  server.on('connection', (socket) => {
+    socket.on('message', (raw) => {
+      const message = JSON.parse(raw.toString());
+      if (message.type === 'hello') {
+        socket.send(JSON.stringify({ type: 'hello_ack', protocolVersion: '1.1', capabilities: [{ operation: 'billing/getInvoice' }] }));
+      } else if (message.type === 'call') {
+        requestId = message.requestId;
+        socket.send(JSON.stringify({ type: 'failed', requestId: message.requestId, error: { code: 'UPSTREAM_ERROR' } }));
+      } else if (message.type === 'result.ack') {
+        resolveAck(message);
+      }
+    });
+  });
+  const client = new GatewayClient({ url: `ws://127.0.0.1:${port}`, token: 'secret', podId: 'pod-1' });
+  context.after(async () => {
+    await client.close();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  await client.start();
+
+  await assert.rejects(client.call('billing/getInvoice', { payload: {} }), { code: 'UPSTREAM_ERROR' });
+  const ack = await ackReceived;
+  assert.equal(ack.type, 'result.ack');
+  assert.equal(ack.protocolVersion, '1.1');
+  assert.equal(ack.requestId, requestId);
+});

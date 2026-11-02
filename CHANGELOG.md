@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5 - 2026-11-02
+
+- Recover abandoned async-result PEL entries when a session reconnects after the grace window, and distribute new results across live sessions.
+- Bound per-session unacknowledged results and WebSocket output buffers; close persistently slow consumers with `SLOW_CONSUMER`.
+- Restore async-result stream retention after Gateway restart and buffer protocol 1.1 sync results even without an idempotency key.
+- ACK failed protocol 1.1 results so their Redis buffers are removed after delivery.
+
 ## 1.0.4 - 2026-10-12
 
 - Place Node-RED node icons beside their runtime/editor files so the editor resolves the custom SVGs.

@@ -35,6 +35,8 @@ module.exports = function registerGatewayNodes(RED) {
       helloTimeoutMs: { type: 'int', default: 5000, min: 1 },
       maxInFlightPerConnection: { type: 'int', default: 1000, min: 1 },
       maxResultBytes: { type: 'int', default: 262144, min: 1 },
+      maxBufferedBytes: { type: 'int', default: 8388608, min: 1 },
+      maxUnackedResultsPerSession: { type: 'int', default: 100, min: 1 },
       maxQueueDepth: { type: 'int', default: 10000, min: 1 },
       maxQueueBytes: { type: 'int', default: 67108864, min: 1 },
       queueBytesFactor: { type: 'float', default: 1.5, min: 1 },
@@ -152,7 +154,7 @@ module.exports = function registerGatewayNodes(RED) {
         asyncResultTtlMs: parsed.value.asyncResultTtlMs
       });
       state.asyncResults = asyncResults;
-      asyncResults.startRetention();
+      await asyncResults.startRetention();
       attempt.onClose(() => asyncResults.close());
       attempt.onClose(async () => {
         shuttingDown = true;
