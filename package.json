@@ -41,7 +41,7 @@
     "verify:requirements": "node scripts/check-req-ids.js"
   },
   "dependencies": {
-    "@redkern/node-red-kit": "^1.0.1",
+    "@redkern/node-red-kit": "^1.1.0",
     "ioredis": "^6.0.0",
     "ws": "^8.18.0"
   },

@@ -2,7 +2,7 @@
 
 Node-RED palette for authenticated WebSocket calls to locally registered Gateway workers.
 
-> **Release:** package metadata is prepared for `1.0.5`; latest published stable version is `1.0.4`. Implemented: Node-RED palette, protocol 1.0/1.1, kit/ioredis shared Redis, GCRA multi-limit reservations and capacity queries, coalesced rate decisions, per-operation normal/bulk streams, delayed scheduling/retry matrix, configurable delivery ceiling and bounded DLQ retention, queue depth/byte bounds, configurable footprint estimate, operation deadlines, HTTP adapter, workers, Redis policy/watermark, lease/fencing, bounded drain, PEL reclaim, executor grace, loopback preStop and token-auth metrics on the shared kit listener, receipt-protected legacy queue/retry migration with reports and guarded rollback for unexecuted work, non-destructive legacy flow migration CLI, sync idempotency/result resume and async per-client/per-operation Redis result streams with ACK, reconnect grace and PEL transfer. Production release gates use 1000 RPS minimum, p95 <=500 ms and error rate <=0.1%. Do not use this package as a production replacement for `@yroshcha/node-red-contrib-pod-gateway` until the tagged release workflow passes.
+> **Release:** `1.0.5` is published; the tagged release workflow passed. Implemented: Node-RED palette, protocol 1.0/1.1, kit/ioredis shared Redis, GCRA multi-limit reservations and capacity queries, coalesced rate decisions, per-operation normal/bulk streams, delayed scheduling/retry matrix, configurable delivery ceiling and bounded DLQ retention, queue depth/byte bounds, configurable footprint estimate, operation deadlines, HTTP adapter, workers, Redis policy/watermark, lease/fencing, bounded drain, PEL reclaim, executor grace, token-authenticated preStop and metrics on the shared kit listener, receipt-protected legacy queue/retry migration with reports and guarded rollback for unexecuted work, non-destructive legacy flow migration CLI, sync idempotency/result resume and async per-client/per-operation Redis result streams with ACK, reconnect grace and PEL transfer. Production release gates use 1000 RPS minimum, p95 <=500 ms and error rate <=0.1%.
 
 ## Requirements
 
@@ -18,7 +18,7 @@ cd ~/.node-red
 npm install @redkern/node-red-gateway
 ```
 
-The package supports Node-RED `>=4.1.0 <6.0.0`. The package uses the `node-red` npm keyword; the tarball whitelist and single entrypoint are checked by `npm run check:pack` (GW-OPS-2). Gateway depends on published `@redkern/node-red-kit@^1.0.1`.
+The package supports Node-RED `>=4.1.0 <6.0.0`. The package uses the `node-red` npm keyword; the tarball whitelist and single entrypoint are checked by `npm run check:pack` (GW-OPS-2). Gateway depends on published `@redkern/node-red-kit@^1.1.0`.
 
 ## Nodes
 
@@ -48,7 +48,7 @@ The server exposes minimal unauthenticated probe responses on its WebSocket port
 - `GET /healthz/live`
 - `GET /healthz/ready`
 
-The kit internal listener defaults to port `9552`. Its token-protected metrics endpoint is `/redkern/gateway/metrics`; configure its token with `REDKERN_GATEWAY_METRICS_TOKEN` and override the port with `REDKERN_GATEWAY_INTERNAL_PORT`. The preStop endpoint shares that listener at `POST http://127.0.0.1:9552/redkern/gateway/prestop`; it uses the peer socket address for loopback-only authorization and accepts a JSON body such as `{"mode":"complete"}`. Supported modes are `complete`, `graceful`, `off`, and `rollback`.
+The kit internal listener defaults to port `9552`. Its token-protected metrics endpoint is `/redkern/gateway/metrics`; configure its token with `REDKERN_GATEWAY_METRICS_TOKEN` and override the port with `REDKERN_GATEWAY_INTERNAL_PORT`. The preStop endpoint shares that listener at `POST http://127.0.0.1:9552/redkern/gateway/prestop`; it requires a token configured with `REDKERN_GATEWAY_PRESTOP_TOKEN` and accepts a JSON body such as `{"mode":"complete"}`. Supported modes are `complete`, `graceful`, `off`, and `rollback`.
 
 Use TLS termination at an ingress/service mesh or configure the TLS credentials directly. Bind to a private interface when TLS is terminated upstream.
 
@@ -85,7 +85,7 @@ npm audit --omit=dev
 
 `test:load` prints end-to-end requests/sec, p50/p95/p99 latency, and error rate. Set `GATEWAY_LOAD_MIN_RPS`, `GATEWAY_LOAD_MAX_P95_MS`, and/or `GATEWAY_LOAD_MAX_ERROR_RATE_PERCENT` to enforce workload acceptance values from the deployment SLO; unset thresholds are reported but not guessed by the package.
 
-The CI matrix is configured and locally verified for Node.js 22 and 24 with Node-RED 4.1.x and 5.x; each combination passed 58 unit and 32 Redis integration tests. The kit TLS Cluster/Toxiproxy gate also passed. A 5,000-request/100-concurrency local load run measured 1,616 RPS, p95 84 ms, and 0% errors against the release thresholds; CI reruns the same SLO gate. The package tarball, requirement-reference, and production dependency audit checks pass. See [RELEASING.md](RELEASING.md) for the npm Trusted Publishing setup and tag procedure. The ambient Node 20.15 runtime is below the package engine requirement; Node 22/24 were used for verification.
+The CI matrix is configured and locally verified for Node.js 22 and 24 with Node-RED 4.1.x and 5.x; each combination passed 64 unit and 35 Redis integration tests. The kit TLS Cluster/Toxiproxy gate also passed. Local 5,000-request/100-concurrency load runs measured 1,717–2,215 RPS, p95 64.76–84.4 ms, and 0% errors against the release thresholds; the tagged CI workflow passed the same SLO gate. The package tarball, requirement-reference, and production dependency audit checks pass. See [RELEASING.md](RELEASING.md) for the npm Trusted Publishing setup and tag procedure. The ambient Node 20.15 runtime is below the package engine requirement; Node 22/24 were used for verification.
 
 ## License
 

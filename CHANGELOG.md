@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Upgrade to `@redkern/node-red-kit@^1.1.0`: the internal server now rejects mixed local and token auth on one listener. Both `/metrics` and `/prestop` endpoints now require bearer tokens. Configure `REDKERN_GATEWAY_PRESTOP_TOKEN` for the preStop endpoint.
+
 ## 1.0.5 - 2026-11-02
 
 - Recover abandoned async-result PEL entries when a session reconnects after the grace window, and distribute new results across live sessions.

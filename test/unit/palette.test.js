@@ -73,13 +73,16 @@ test('palette metrics render valid Prometheus text and count registered Gateway 
   assert.ok(output.endsWith('\n'));
 });
 
-test('Gateway preStop and bearer metrics share the kit internal port with route-level auth (GW-MIG-3)', async () => {
+test('Gateway preStop and bearer metrics use token-based auth on the kit internal port (GW-MIG-3)', async () => {
   const port = await unusedPort();
   const originalPort = process.env.REDKERN_GATEWAY_INTERNAL_PORT;
-  const originalToken = process.env.REDKERN_GATEWAY_METRICS_TOKEN;
-  const token = '0123456789abcdefghijklmnopqrstuv';
+  const originalMetricsToken = process.env.REDKERN_GATEWAY_METRICS_TOKEN;
+  const originalPrestopToken = process.env.REDKERN_GATEWAY_PRESTOP_TOKEN;
+  const metricsToken = '0123456789abcdefghijklmnopqrstuv';
+  const prestopToken = 'fedcba9876543210fedcba9876543210';
   process.env.REDKERN_GATEWAY_INTERNAL_PORT = String(port);
-  process.env.REDKERN_GATEWAY_METRICS_TOKEN = token;
+  process.env.REDKERN_GATEWAY_METRICS_TOKEN = metricsToken;
+  process.env.REDKERN_GATEWAY_PRESTOP_TOKEN = prestopToken;
   const RED = {
     events: new EventEmitter(),
     settings: {},
@@ -104,19 +107,23 @@ test('Gateway preStop and bearer metrics share the kit internal port with route-
     const base = `http://127.0.0.1:${port}/redkern/gateway`;
     const deniedMetrics = await fetch(`${base}/metrics`);
     assert.equal(deniedMetrics.status, 401);
-    const metrics = await fetch(`${base}/metrics`, { headers: { authorization: `Bearer ${token}` } });
+    const metrics = await fetch(`${base}/metrics`, { headers: { authorization: `Bearer ${metricsToken}` } });
     assert.equal(metrics.status, 200);
     assert.match(await metrics.text(), /redkern_gateway_up/);
 
+    const deniedPreStop = await fetch(`${base}/prestop`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'graceful' })
+    });
+    assert.equal(deniedPreStop.status, 401);
     const remotePreStop = await fetch(`${base}/prestop`, {
-      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '127.0.0.1' }, body: JSON.stringify({ mode: 'graceful' })
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${prestopToken}` }, body: JSON.stringify({ mode: 'graceful' })
     });
     assert.equal(remotePreStop.status, 200);
     assert.deepEqual(await remotePreStop.json(), { mode: 'graceful', gateways: [{ mode: 'graceful', timeoutMs: 125, remaining: 0 }] });
     assert.equal(drainReports.length, 1);
 
     const rollback = await fetch(`${base}/prestop`, {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'rollback' })
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${prestopToken}` }, body: JSON.stringify({ mode: 'rollback' })
     });
     assert.equal(rollback.status, 200);
     assert.deepEqual(await rollback.json(), {
@@ -131,7 +138,9 @@ test('Gateway preStop and bearer metrics share the kit internal port with route-
     await new Promise((resolve) => node.emit('close', false, resolve));
     if (originalPort === undefined) delete process.env.REDKERN_GATEWAY_INTERNAL_PORT;
     else process.env.REDKERN_GATEWAY_INTERNAL_PORT = originalPort;
-    if (originalToken === undefined) delete process.env.REDKERN_GATEWAY_METRICS_TOKEN;
-    else process.env.REDKERN_GATEWAY_METRICS_TOKEN = originalToken;
+    if (originalMetricsToken === undefined) delete process.env.REDKERN_GATEWAY_METRICS_TOKEN;
+    else process.env.REDKERN_GATEWAY_METRICS_TOKEN = originalMetricsToken;
+    if (originalPrestopToken === undefined) delete process.env.REDKERN_GATEWAY_PRESTOP_TOKEN;
+    else process.env.REDKERN_GATEWAY_PRESTOP_TOKEN = originalPrestopToken;
   }
 });
