@@ -73,6 +73,70 @@ test('palette metrics render valid Prometheus text and count registered Gateway 
   assert.ok(output.endsWith('\n'));
 });
 
+async function withInternalPort(env, run) {
+  const port = await unusedPort();
+  const names = ['REDKERN_GATEWAY_INTERNAL_PORT', 'REDKERN_GATEWAY_METRICS_TOKEN', 'REDKERN_GATEWAY_PRESTOP_TOKEN'];
+  const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  for (const name of names) delete process.env[name];
+  Object.assign(process.env, { REDKERN_GATEWAY_INTERNAL_PORT: String(port) }, env);
+  const warnings = [];
+  const RED = { events: new EventEmitter(), settings: {}, log: { error() {}, warn(message) { warnings.push(message); }, info() {}, debug() {} } };
+  const palette = initializePalette(RED);
+  const node = new EventEmitter();
+  node.id = 'internal-port-server';
+  node.status = () => {};
+  const k = palette.rk.bind(node);
+  const drains = [];
+  const gatewayState = {
+    options: { drainTimeoutMs: 125, completeDrainTimeoutMs: 500 },
+    runtime: { async drain(mode, timeoutMs) { drains.push(mode); return { mode, timeoutMs, remaining: 0 }; } }
+  };
+  const lease = k.internalServer?.acquire(node.id, { node: { gatewayState } });
+  try {
+    await lease?.ready;
+    await run({ palette, warnings, drains, base: `http://127.0.0.1:${port}/redkern/gateway` });
+  } finally {
+    await lease?.release();
+    await new Promise((resolve) => node.emit('close', false, resolve));
+    for (const name of names) {
+      if (original[name] === undefined) delete process.env[name];
+      else process.env[name] = original[name];
+    }
+  }
+}
+
+test('Without internal tokens the palette stays enabled and preStop keeps the 1.0.5 loopback contract', async () => {
+  await withInternalPort({}, async ({ palette, warnings, drains, base }) => {
+    assert.equal(palette.rk.enabled, true);
+    assert.equal(palette.rk.config.ok, true);
+    assert.deepEqual(warnings, []);
+    const preStop = await fetch(`${base}/prestop`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'graceful' })
+    });
+    assert.equal(preStop.status, 200);
+    assert.deepEqual(drains, ['graceful']);
+    const metrics = await fetch(`${base}/metrics`);
+    assert.equal(metrics.status, 404);
+  });
+});
+
+test('A metrics token without a preStop token keeps the palette enabled, turns preStop off and warns', async () => {
+  const metricsToken = '0123456789abcdefghijklmnopqrstuv';
+  await withInternalPort({ REDKERN_GATEWAY_METRICS_TOKEN: metricsToken }, async ({ palette, warnings, drains, base }) => {
+    assert.equal(palette.rk.enabled, true);
+    assert.equal(palette.rk.config.ok, true);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /REDKERN_GATEWAY_PRESTOP_TOKEN/);
+    const metrics = await fetch(`${base}/metrics`, { headers: { authorization: `Bearer ${metricsToken}` } });
+    assert.equal(metrics.status, 200);
+    const preStop = await fetch(`${base}/prestop`, {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${metricsToken}` }, body: JSON.stringify({ mode: 'graceful' })
+    });
+    assert.equal(preStop.status, 404);
+    assert.deepEqual(drains, []);
+  });
+});
+
 test('Gateway preStop and bearer metrics use token-based auth on the kit internal port (GW-MIG-3)', async () => {
   const port = await unusedPort();
   const originalPort = process.env.REDKERN_GATEWAY_INTERNAL_PORT;

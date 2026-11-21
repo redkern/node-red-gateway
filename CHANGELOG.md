@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.0.7 - 2026-11-21
 
-- Upgrade to `@redkern/node-red-kit@^1.1.0`: the internal server now rejects mixed local and token auth on one listener. Both `/metrics` and `/prestop` endpoints now require bearer tokens. Configure `REDKERN_GATEWAY_PRESTOP_TOKEN` for the preStop endpoint.
+- Upgrade to `@redkern/node-red-kit@^1.1.0`. Kit 1.1.0 rejects loopback and token routes on one internal listener, so the internal port now has two modes:
+  - no `REDKERN_GATEWAY_METRICS_TOKEN`: the listener is loopback-only and `POST /redkern/gateway/prestop` works without a token, as in 1.0.5; metrics go through the kit metrics source (prometheus palette);
+  - `REDKERN_GATEWAY_METRICS_TOKEN` set: `/metrics` and `/prestop` both need bearer tokens; set `REDKERN_GATEWAY_PRESTOP_TOKEN` for preStop, otherwise the preStop route is off and a warning is logged.
+- Fixed: a missing metrics or preStop token no longer disables the whole palette with `SECRET_REQUIRED`.
+- Gateway 1.0.5 installed without a lockfile resolves kit 1.1.0 and fails at startup; upgrade to 1.0.7.
+- `v1.0.6` was tagged but never published to npm; it disabled the palette unless both tokens were set.
 
 ## 1.0.5 - 2026-11-02
 
