@@ -62,6 +62,68 @@ test('Redis queue enqueues per operation and ACKs/deletes completed entries', {
   await redis.del(keys.normal, keys.bulk, keys.delayed, keys.delayedData);
 }));
 
+test('queue pulls no more than its free executor slots in one batch', {
+  skip: !redisUrl && 'Set REDIS_GCRA_TEST_URL to run the Redis integration test'
+}, async () => withRedis(async (redis) => {
+  const prefix = `gateway-batch-test-${process.pid}`;
+  const operation = 'billing/batch';
+  const keys = streamKeys(prefix, operation);
+  await redis.del(...Object.values(keys));
+  const queue = new RedisOperationQueue({ redis, keyPrefix: prefix, consumerId: 'batch-consumer' });
+  let releaseExecutors;
+  const heldExecutors = new Promise((resolve) => { releaseExecutors = resolve; });
+  let resolveStarted;
+  const fourStarted = new Promise((resolve) => { resolveStarted = resolve; });
+  let started = 0;
+  await queue.register(operation, {
+    concurrency: 4,
+    execute: async () => {
+      started += 1;
+      if (started === 4) resolveStarted();
+      await heldExecutors;
+      return { ok: true };
+    }
+  });
+  const results = [];
+  let resolveResults;
+  const fiveResults = new Promise((resolve) => { resolveResults = resolve; });
+  queue.on('result', ({ task }) => {
+    results.push(task.requestId);
+    if (results.length === 5) resolveResults();
+  });
+  const now = Date.now();
+  for (let index = 0; index < 5; index += 1) {
+    await redis.xadd(keys.normal, '*', 'data', JSON.stringify({
+      requestId: `batch-${index}`,
+      operation,
+      message: {},
+      queuedAt: now,
+      queueTimeoutMs: 10000,
+      execTimeoutMs: 5000,
+      deadlineAt: now + 20000
+    }));
+  }
+  const originalRead = redis.xreadgroup;
+  const readCounts = [];
+  redis.xreadgroup = (...args) => {
+    readCounts.push(Number(args[4]));
+    return originalRead.apply(redis, args);
+  };
+  try {
+    await queue._pump(queue.operations.get(operation));
+    await fourStarted;
+    assert.equal(queue.operations.get(operation).active, 4);
+    assert.equal(readCounts[0], 4);
+  } finally {
+    releaseExecutors();
+    redis.xreadgroup = originalRead;
+  }
+  await fiveResults;
+  assert.equal(results.length, 5);
+  await queue.close();
+  await redis.del(...Object.values(keys));
+}));
+
 test('terminal failures honor maxDeliveries and are retained in a bounded DLQ', {
   skip: !redisUrl && 'Set REDIS_GCRA_TEST_URL to run the Redis integration test'
 }, async () => withRedis(async (redis) => {
