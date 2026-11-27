@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.8 - 2026-11-27
+
+- Read queued tasks from Redis Streams in batches up to free executor capacity, reducing round trips while preserving normal/bulk fairness.
+
 ## 1.0.7 - 2026-11-21
 
 - Upgrade to `@redkern/node-red-kit@^1.1.0`. Kit 1.1.0 rejects loopback and token routes on one internal listener, so the internal port now has two modes:
